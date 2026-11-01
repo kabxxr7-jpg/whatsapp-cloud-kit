@@ -1,6 +1,6 @@
 // End to end over real HTTP on ports 4750-4769: the kit's server, the mock Graph API, and signed webhooks between them.
 import http from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp, closeServer, listenInRange, type App, type AppConfig } from "../src/server.ts";
 import { WhatsAppSender } from "../src/sender.ts";
 import { inboundPayload, sign, statusPayload, verifyQuery } from "../testing/fixtures.ts";
@@ -257,10 +257,22 @@ describe("Send by WhatsApp, end to end", () => {
   it("does not leak internals when something breaks", async () => {
     const kit = await startKit();
     kit.w.store.db.exec("DROP TABLE sends");
-    const r = await sendDoc(kit);
+    const logged: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
+      logged.push(String(chunk));
+      return true;
+    });
+    let r: Awaited<ReturnType<typeof sendDoc>>;
+    try {
+      r = await sendDoc(kit);
+    } finally {
+      spy.mockRestore();
+    }
     expect(r.status).toBe(500);
     expect(r.json).toEqual({ error: "internal_error" });
     expect(r.raw).not.toContain("sends");
+    // the detail goes to the server log, not to the client
+    expect(logged.join("")).toContain("no such table: sends");
   });
 });
 
