@@ -375,6 +375,7 @@ export class MockGraph {
           .then(async (res) => {
             const headersOut: Record<string, string> = {};
             res.headers.forEach((v, k) => (headersOut[k] = v));
+            headersOut["connection"] = "close"; // no keep-alive: the next test may reuse this port for another instance
             nodeRes.writeHead(res.status, headersOut);
             nodeRes.end(Buffer.from(await res.arrayBuffer()));
           })
