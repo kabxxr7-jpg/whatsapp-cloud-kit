@@ -253,6 +253,29 @@ describe("media", () => {
     expect(w.mock.uploads).toHaveLength(2);
   });
 
+  it("uploads again after the API refused a cached media id, instead of failing the same way until the cache entry expires", async () => {
+    const w = make();
+    await go(w); // uploads and caches
+    w.mock.expireMedia(w.mock.uploads[0]!.id); // the platform stops accepting that id early
+    const refused = await go(w, DOC.arBudget, { resend: true });
+    expect(refused.outcome).toBe("failed");
+    expect(refused.error?.code).toBe(131009);
+    const again = await go(w, DOC.arBudget, { resend: true });
+    expect(again.outcome).toBe("sent");
+    expect(w.mock.uploads).toHaveLength(2);
+    expect(JSON.stringify(w.mock.messages.at(-1)!.body)).toContain(w.mock.uploads[1]!.id);
+  });
+
+  it("keeps the cached media id when the outcome is only in doubt (a dropped connection says nothing about the file)", async () => {
+    const w = make({ sender: { retryAmbiguous: false } });
+    w.mock.dropNext(1, "messages");
+    const doubtful = await go(w);
+    expect(doubtful.outcome).toBe("in_doubt");
+    const forced = await go(w, DOC.arBudget, { retryInDoubt: true });
+    expect(forced.outcome).toBe("sent");
+    expect(w.mock.uploads).toHaveLength(1);
+  });
+
   it("does not share uploads between tenants", async () => {
     const w = make();
     const base = { documentId: "d1", docType: "invoice" as const, document: { kind: "bytes" as const, bytes: pdf, filename: "same.pdf" }, recipientName: "X", documentNumber: "1" };

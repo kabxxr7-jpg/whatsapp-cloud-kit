@@ -393,11 +393,11 @@ export class WhatsAppSender {
             ref: row.ref,
           });
 
-    return this.postMessage(tenant, row, body);
+    return this.postMessage(tenant, row, body, "id" in media ? media.id : undefined);
   }
 
   /** POST the message with retries and record the outcome. */
-  private async postMessage(tenant: Tenant, row: SendRow, body: Record<string, unknown>): Promise<SendResult> {
+  private async postMessage(tenant: Tenant, row: SendRow, body: Record<string, unknown>, uploadedMediaId?: string): Promise<SendResult> {
     const store = this.store;
     const run = () => this.graph(tenant, "messages", { body: JSON.stringify(body), headers: { "content-type": "application/json" } });
     const { reply, classified } = await this.withRetries(run, () => store.touchAttempt(row.id), this.retryAmbiguous);
@@ -423,6 +423,10 @@ export class WhatsAppSender {
       const unknown = store.markUnknown(row.id, { details: c.error.details, es: c.error.es, en: c.error.en });
       return { outcome: "in_doubt", send: unknown, message: MSG.in_doubt, error: publicError(c) };
     }
+    // The API refused the message. If it refused because it no longer accepts the cached media id (the docs give ids a
+    // 30-day life, but nothing says that is the only way one stops working), the next click must upload again instead of
+    // reusing the same id until the cache entry expires. Costs one extra upload when the refusal was about something else.
+    if (uploadedMediaId !== undefined) store.dropCachedMedia(tenant.id, uploadedMediaId);
     const failed = store.markFailedBeforeAccept(row.id, { code: c.error.code, details: c.error.details, es: c.error.es, en: c.error.en });
     return { outcome: "failed", send: failed, message: { es: c.error.es, en: c.error.en }, error: publicError(c) };
   }

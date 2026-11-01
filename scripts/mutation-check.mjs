@@ -195,7 +195,9 @@ const MUTANTS = [
   { id: "snd-number-of-first-tenant", area: "tenant routing", file: "src/sender.ts", what: "send from the first tenant's phone_number_id",
     find: "const url = `${this.baseUrl}/${this.version}/${tenant.phoneNumberId}/${path}`;", replace: "const url = `${this.baseUrl}/${this.version}/${this.store.listTenants()[0]!.phoneNumberId}/${path}`;" },
   { id: "snd-media-never-reused", area: "idempotency", file: "src/sender.ts", what: "never reuse an uploaded media id",
-    find: "if (cached) return { ok: true, id: cached };", replace: "" },
+    find: "if (cached) return { ok: true, id: cached };", replace: "void cached;" },
+  { id: "snd-dead-media-kept", area: "idempotency", file: "src/sender.ts", what: "a media id the API refused stays in the cache and is reused",
+    find: "if (uploadedMediaId !== undefined) store.dropCachedMedia(tenant.id, uploadedMediaId);", replace: "void uploadedMediaId;" },
   { id: "db-media-never-expires", area: "idempotency", file: "src/db.ts", what: "cached media ids never expire",
     find: 'return (r["expires_at"] as number) > now ? (r["media_id"] as string) : null;', replace: 'return r["media_id"] as string;' },
 
