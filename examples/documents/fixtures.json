@@ -1,0 +1,94 @@
+{
+  "note": "Fictional tenants, customers and numbers for the demo. Phone numbers are written the way people type them. Nothing is ever sent to them: the demo talks to a local mock.",
+  "tenants": [
+    {
+      "id": "taller-ar",
+      "name": "Taller Ejemplo SRL",
+      "phoneNumberId": "100000000000001",
+      "accessToken": "fake-token-taller-ar",
+      "wabaId": "200000000000001",
+      "defaultCountry": "AR",
+      "locale": "es"
+    },
+    {
+      "id": "estudio-es",
+      "name": "Estudio Ejemplo SL",
+      "phoneNumberId": "100000000000002",
+      "accessToken": "fake-token-estudio-es",
+      "wabaId": "200000000000002",
+      "defaultCountry": "ES",
+      "locale": "es"
+    }
+  ],
+  "documents": [
+    {
+      "tenantId": "taller-ar",
+      "id": "doc-ar-budget-1",
+      "type": "budget",
+      "number": "P-2026-0042",
+      "customerName": "María Gómez",
+      "customerPhone": "011 15 5550-0101",
+      "currency": "ARS",
+      "issuedOn": "2026-10-28",
+      "lines": [
+        { "description": "Cambio de embrague", "quantity": 1, "unitCents": 18500000 },
+        { "description": "Mano de obra", "quantity": 4, "unitCents": 1200000 }
+      ]
+    },
+    {
+      "tenantId": "taller-ar",
+      "id": "doc-ar-invoice-1",
+      "type": "invoice",
+      "number": "A-0001-00001234",
+      "customerName": "Carlos Díaz",
+      "customerPhone": "+54 9 351 555-0102",
+      "currency": "ARS",
+      "issuedOn": "2026-10-29",
+      "lines": [{ "description": "Service 20.000 km", "quantity": 1, "unitCents": 9500000 }]
+    },
+    {
+      "tenantId": "taller-ar",
+      "id": "doc-ar-po-1",
+      "type": "purchase_order",
+      "number": "OC-2026-0108",
+      "customerName": "Distribuidora Norte",
+      "customerPhone": "+54 11 5550 0103",
+      "currency": "ARS",
+      "issuedOn": "2026-10-30",
+      "lines": [{ "description": "Pastillas de freno (juego)", "quantity": 6, "unitCents": 4200000 }]
+    },
+    {
+      "tenantId": "estudio-es",
+      "id": "doc-es-budget-1",
+      "type": "budget",
+      "number": "P-2026-0007",
+      "customerName": "Lucía Fernández",
+      "customerPhone": "612 34 56 78",
+      "currency": "EUR",
+      "issuedOn": "2026-10-27",
+      "lines": [{ "description": "Reforma de cocina (proyecto)", "quantity": 1, "unitCents": 120000 }]
+    },
+    {
+      "tenantId": "estudio-es",
+      "id": "doc-es-invoice-1",
+      "type": "invoice",
+      "number": "F-2026-0031",
+      "customerName": "Javier Ortega",
+      "customerPhone": "+34 677 00 11 22",
+      "currency": "EUR",
+      "issuedOn": "2026-10-29",
+      "lines": [{ "description": "Honorarios octubre", "quantity": 1, "unitCents": 85000 }]
+    },
+    {
+      "tenantId": "estudio-es",
+      "id": "doc-es-po-1",
+      "type": "purchase_order",
+      "number": "OC-2026-0012",
+      "customerName": "Materiales del Sur",
+      "customerPhone": "+52 1 55 5550 0104",
+      "currency": "EUR",
+      "issuedOn": "2026-10-30",
+      "lines": [{ "description": "Azulejos (m2)", "quantity": 40, "unitCents": 1850 }]
+    }
+  ]
+}
