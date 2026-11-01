@@ -469,6 +469,11 @@ export class Store {
     this.db.prepare("UPDATE sends SET attempts = attempts + 1, updated_at = ? WHERE id = ?").run(this.now(), id);
   }
 
+  /** A retried send may take a different route than the first try (template instead of free-form): keep the row truthful. */
+  setRoute(id: number, route: { kind: SendKind; templateName: string | null; language: string | null }): void {
+    this.db.prepare("UPDATE sends SET kind = ?, template_name = ?, language = ?, updated_at = ? WHERE id = ?").run(route.kind, route.templateName, route.language, this.now(), id);
+  }
+
   setMediaId(id: number, mediaId: string): void {
     this.db.prepare("UPDATE sends SET media_id = ?, updated_at = ? WHERE id = ?").run(mediaId, this.now(), id);
   }
@@ -511,7 +516,10 @@ export class Store {
       .prepare(
         `UPDATE sends SET wamid = ?, accepted_at = COALESCE(accepted_at, ?), updated_at = ?,
            status = CASE WHEN status IN ('pending','unknown') OR (status = 'failed' AND wamid IS NULL) THEN 'accepted' ELSE status END,
-           error_code = CASE WHEN status IN ('pending','unknown','failed') THEN NULL ELSE error_code END
+           error_code = CASE WHEN status IN ('pending','unknown','failed') THEN NULL ELSE error_code END,
+           error_details = CASE WHEN status IN ('pending','unknown','failed') THEN NULL ELSE error_details END,
+           error_es = CASE WHEN status IN ('pending','unknown','failed') THEN NULL ELSE error_es END,
+           error_en = CASE WHEN status IN ('pending','unknown','failed') THEN NULL ELSE error_en END
          WHERE id = ? AND wamid IS NULL`,
       )
       .run(wamid, ts, ts, id);

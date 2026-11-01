@@ -354,6 +354,7 @@ export class WhatsAppSender {
       if (inDoubt && input.retryInDoubt !== true) return { outcome: "in_doubt", send: row, message: MSG.in_doubt };
       const claimed = store.claimForAttempt(row.id, { allowUnknown: input.retryInDoubt === true, stalePendingBefore: input.retryInDoubt === true ? nowS : nowS - this.staleSeconds });
       if (!claimed) return { outcome: "in_flight", send: store.getSend(row.id)!, message: MSG.in_flight };
+      store.setRoute(row.id, { kind, templateName: kind === "template" ? choice.name : null, language: kind === "template" ? choice.language : null });
       row = store.getSend(row.id)!;
     }
 
