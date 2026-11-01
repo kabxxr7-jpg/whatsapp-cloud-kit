@@ -18,5 +18,5 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "test", "testing", "scripts", "vitest.config.ts"]
+  "include": ["src", "test", "testing", "scripts", "examples", "vitest.config.ts"]
 }
