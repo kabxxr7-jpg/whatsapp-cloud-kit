@@ -1,6 +1,6 @@
 # whatsapp-cloud-kit
 
-> **Status:** a proof project. @@TESTS@@ tests in @@FILES@@ files pass locally on Node @@NODE@@ (typecheck clean), and a mutation check breaks `src/` in @@MUT_TOTAL@@ deliberate ways, of which @@MUT_KILLED@@ are caught by the tests (see "Tests and the mutation check" for the rest). **Nothing here has ever run on WhatsApp or Meta.** There was no Meta account, no business verification, no approved template and no real phone number behind it. Every test talks to a **local mock of the Graph API** or to **signed fixture events** written from the field names in Meta's public documentation. The mock, the fixtures and the code were written by the same person from the same reading of the same pages, so a misreading would be shared by all three. [docs/GO-LIVE-CHECKLIST.md](docs/GO-LIVE-CHECKLIST.md) lists what only a live run can settle; its "ran on Meta on" line is blank.
+> **Status:** a proof project. 404 tests in 14 files pass locally on Node v26.13.0 (typecheck clean), and a mutation check breaks `src/` in 96 deliberate ways, all 96 of which the tests catch (the first full run caught 93; the three that survived were gaps in the tests, now closed: see "Tests and the mutation check"). **Nothing here has ever run on WhatsApp or Meta.** There was no Meta account, no business verification, no approved template and no real phone number behind it. Every test talks to a **local mock of the Graph API** or to **signed fixture events** written from the field names in Meta's public documentation. The mock, the fixtures and the code were written by the same person from the same reading of the same pages, so a misreading would be shared by all three. [docs/GO-LIVE-CHECKLIST.md](docs/GO-LIVE-CHECKLIST.md) lists what only a live run can settle; its "ran on Meta on" line is blank.
 
 A tested starting point for the job "add **Send by WhatsApp** next to **Send by email** for the PDF documents (quotes, invoices, purchase orders) my multi-tenant Node app already generates, show delivery and read status from webhooks, use Spanish templates, and make it work for Argentine numbers".
 
@@ -17,7 +17,7 @@ A tested starting point for the job "add **Send by WhatsApp** next to **Send by 
 | Mock Graph API | `testing/mock-graph.ts` | Local stand-in for `/media` and `/messages` with scripted failures (rate limit, 5xx, dropped connection, hang, failure after accept), automatic status webhooks (also reversed or duplicated), wa_id rewriting, expiring media. Listens on ports 4750-4769 only |
 | Fixtures | `testing/fixtures.ts`, `scripts/generate-fixtures.ts` | Builders for status and inbound payloads in the documented shape, and a signer. `npm run fixtures:generate` writes signed examples for `curl` |
 | Wiring example | `examples/own-app/wiring.ts` | How to read the environment variables and mount the two webhook functions in your own framework |
-| Mutation check | `scripts/mutation-check.mjs` | @@MUT_TOTAL@@ deliberate breakages of `src/`, run one at a time on a throwaway copy, each with a hard timeout that kills the whole process tree; a self-test with a planted hang |
+| Mutation check | `scripts/mutation-check.mjs` | 96 deliberate breakages of `src/`, run one at a time on a throwaway copy, each with a hard timeout that kills the whole process tree; a self-test with a planted hang |
 
 Runtime code uses only Node built-ins (`node:crypto`, `node:http`, `node:sqlite`, global `fetch`, `FormData`). Dev dependencies: `vitest`, `typescript`, `@types/node`. Nothing here is on npm; copy `src/` or import it by path. Needs Node 25 or newer (`node:sqlite`, running `.ts` files directly); `node:sqlite` still prints one experimental warning.
 
@@ -150,13 +150,51 @@ All pages were read on 2026-11-01; see [docs/SOURCES.md](docs/SOURCES.md) for th
 
 ## Tests and the mutation check
 
-`npm test` runs @@TESTS@@ vitest tests in @@FILES@@ files (see the table), two workers, no network except the loopback mock. The ones that matter most for the claims above: the webhook tests post signed, tampered, replayed, reordered, duplicated and cross-tenant events to the real handler and then through a real HTTP server; the sender tests drive the real sender against the mock with scripted rate limits, 5xx, dropped connections, hangs and a failure after the message was accepted; the phone tests carry a table of real-world spellings per country.
+`npm test` runs 404 vitest tests in 14 files (see the table), two workers, no network except the loopback mock. The ones that matter most for the claims above: the webhook tests post signed, tampered, replayed, reordered, duplicated and cross-tenant events to the real handler and then through a real HTTP server; the sender tests drive the real sender against the mock with scripted rate limits, 5xx, dropped connections, hangs and a failure after the message was accepted; the phone tests carry a table of real-world spellings per country.
 
-@@TEST_TABLE@@
+| Test file | Tests | What it covers |
+|---|---|---|
+| `sender.test.ts` | 74 | template and free-form paths, one message per document and recipient, concurrent clicks, retries and backoff, rate limits, 5xx and dropped connections, "in doubt" handling, media upload and reuse, opt-out and window checks, per-tenant tokens and numbers, plain-language errors |
+| `webhook.test.ts` | 59 | GET verification, signed / unsigned / tampered / replayed / future-dated posts, rotation and tenant-restricted secrets, routing by `phone_number_id`, batches, shape tolerance, status and inbound lifecycle, STOP / START, confirmations |
+| `phone.test.ts` | 55 | spellings per country (Argentina, Spain, Mexico, Brazil, India, US, generic), rejection reasons in both languages, `matchKey` |
+| `mock-graph.test.ts` | 42 | the mock itself: validation rules, scripted failures, automatic status webhooks, media expiry (a test double that is wrong makes every other test meaningless) |
+| `server.test.ts` | 27 | end to end over real HTTP: the demo routes, status codes per outcome, body limits, bad paths, the webhook through a real socket, no leaked internals |
+| `inbound.test.ts` | 26 | keyword matching, window arithmetic at the boundary, identity links, duplicates |
+| `statuses.test.ts` | 26 | ordering, duplicates, implied delivery, failures after delivery, parked early statuses, adoption by reference |
+| `payloads.test.ts` | 24 | message and template JSON, document checks |
+| `documents.test.ts` | 22 | the example documents integration, PDF output, HTML views, history |
+| `signature.test.ts`, `signature-constant-time.test.ts` | 14 + 3 | the HMAC check against a published test vector, header shapes, rotation, and that comparisons do not exit early |
+| `errors.test.ts` | 12 | error-code mapping, retryable flags, both languages |
+| `templates.test.ts` | 10 | template text, variables and creation payloads |
+| `wiring.test.ts` | 10 | the environment-variable wiring for a host app |
+| **Total** | **404** | |
 
-`npm run mutation-check` applies each of the @@MUT_TOTAL@@ mutants to a **throwaway copy** of the repository (`.mutation-<pid>/`, deleted afterwards), typechecks it (a mutant that does not typecheck is reported INVALID and does not count), runs the suite with `--bail 1` and records KILLED (a test failed), SURVIVED (all passed), TIMEOUT or ERROR. Rules it enforces on itself: one mutant at a time; a hard per-mutant timeout that kills the **whole process group**, and a timeout is reported as TIMEOUT, never as a kill; it waits until the 1-minute load average is under 6 before each run and gives up after 20 minutes of waiting rather than running on a loaded machine; `npm run mutation-selftest` plants a hang (and a grandchild process) and asserts it is reported TIMEOUT and that nothing is left running. Areas covered: signature, webhook, idempotency, retry, 24-hour window, opt-out, error mapping, status ordering, tenant routing, phone normalisation, server.
+`npm run mutation-check` applies each of the 96 mutants to a **throwaway copy** of the repository (`.mutation-<pid>/`, deleted afterwards), typechecks it (a mutant that does not typecheck is reported INVALID and does not count), runs the whole suite and records KILLED (a test failed), SURVIVED (all passed), TIMEOUT or ERROR. Rules it enforces on itself: one mutant at a time; a hard per-mutant timeout that kills the **whole process group**, and a timeout is reported as TIMEOUT, never as a kill; it waits until the 1-minute load average is under 6 before each run and gives up after 20 minutes of waiting rather than running on a loaded machine; `npm run mutation-selftest` plants a hang (and a grandchild process) and asserts it is reported TIMEOUT and that nothing is left running. Areas covered: signature, webhook, idempotency, retry, 24-hour window, opt-out, error mapping, status ordering, tenant routing, phone normalisation, server.
 
-@@MUTATION_RESULT@@
+**Result on the final tree: 96 of 96 killed, 0 survived, 0 timed out, 0 errors, 0 invalid** (suite-level kills: none; every kill is a named failing test).
+
+| Area | Killed |
+|---|---|
+| signature | 6 / 6 |
+| webhook | 13 / 13 |
+| idempotency | 11 / 11 |
+| retry | 7 / 7 |
+| 24-hour window | 7 / 7 |
+| opt-out | 11 / 11 |
+| error mapping | 8 / 8 |
+| status ordering | 7 / 7 |
+| tenant routing | 5 / 5 |
+| phone normalisation | 16 / 16 |
+| server | 5 / 5 |
+
+What it took to get there, because the first numbers were not 96:
+
+- **Three survivors in the first full run (93 / 96), all genuine test gaps.** (1) Ignoring the `wa_id` / `user_id` pairs in `contacts[]` went unnoticed, because the one test that covered it also carried the id in the message itself; a new test sends a message with only the user id. (2) A deliberate "send again" could start while the previous send was still running. (3) "Retry the doubtful send" could take over a send another worker was running right then (this one would have double-sent). Tests were added, the three mutants were killed, and the full run was repeated.
+- **23 mutants first came out INVALID**, because the compiler's "declared but never used" errors rejected mutants that leave a variable behind. The harness now ignores that class of diagnostic only (any other compiler error still makes a mutant INVALID); four mutants were rewritten to typecheck and one Spanish-number mutant was added.
+- **One ERROR in the second full run** (a failed run with no failing test in the report). Reproduced: with `--bail 1`, vitest's JSON report shows zero failures in about one run in six although the run failed. The harness no longer uses `--bail`, and a run without a verdict is repeated once and the repeat is recorded in the result.
+- Two real defects were found by tests and by review while the kit was written, and fixed: a send retried after a failure kept the route (template or free-form) of its first attempt (a test caught it; the mutant `snd-no-set-route` guards it now), and a media id the API had refused stayed in the cache (found while writing the go-live checklist; fixed with a test and the mutant `snd-dead-media-kept`).
+
+A mutant is a specific breakage I thought of. 96 of 96 means those 96 are caught; it does not mean the tests would catch every bug.
 
 ## Limits
 
