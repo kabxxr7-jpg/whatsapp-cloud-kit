@@ -216,6 +216,7 @@ Read these before relying on anything.
 14. **BSUID / username handling** is written from a page marked "subject to change" and is the least tested part.
 15. **Not included:** Embedded Signup, inbound media download, interactive and list messages, calls, group messaging, a UI beyond the demo list, rate limiting of your own users, GDPR deletion tooling, an admin screen for tenants.
 16. **Fixtures go stale** after about 8 days because the webhook enforces its age window; regenerate them.
+17. **Only Node v26.13.0 on macOS was used.** `.github/workflows/ci.yml` (Node 25, Ubuntu) is written but has never run: the project has no remote repository.
 
 ## What this does not prove
 
