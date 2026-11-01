@@ -417,7 +417,9 @@ async function runMutants({ root, entries, mutants, timeoutSec, typecheck, valid
   const bin = (name) => join(work, "node_modules", ".bin", name);
   const env = { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", NODE_NO_WARNINGS: "1", CI: "1" };
   const resultFile = join(work, "result.json");
-  const vitestArgs = ["run", "--bail", "1", "--reporter=json", `--outputFile=${resultFile}`];
+  // No --bail: with it, vitest's JSON report sometimes shows no failing test although the run failed (seen in 1 of 6 runs
+  // of the same mutant), which cannot be told apart from a crash. The whole suite takes a few seconds.
+  const vitestArgs = ["run", "--reporter=json", `--outputFile=${resultFile}`];
 
   try {
     let baseline = null;
@@ -468,24 +470,41 @@ async function runMutants({ root, entries, mutants, timeoutSec, typecheck, valid
           console.log(`valid     ${m.id}`);
           continue;
         }
-        await waitForLoad(`mutant ${m.id}`);
-        rmSync(resultFile, { force: true });
-        const r = await run(bin("vitest"), vitestArgs, { cwd: work, env, timeoutMs: perMutantMs });
-        let entry;
-        if (r.timedOut) {
-          entry = { ...m, status: "TIMEOUT", why: `no verdict within ${Math.round(perMutantMs / 1000)} s; process group killed${r.leftover ? "; SOME PROCESSES SURVIVED THE KILL" : ""}` };
-        } else if (r.code === 0) {
-          entry = { ...m, status: "SURVIVED", why: "" };
-        } else {
-          const json = parseVitestJson(resultFile);
-          const failed = json ? firstFailure(json) : null;
-          if (failed) entry = { ...m, status: "KILLED", why: failed };
-          else if (json && json.numFailedTestSuites > 0) entry = { ...m, status: "KILLED", why: "a test file failed to run (suite-level failure)", suiteLevel: true };
-          else entry = { ...m, status: "ERROR", why: "tests exited non-zero but no failing test was reported" };
+        // One attempt at a verdict. ERROR means "no verdict" (the run ended without a failing test being reported).
+        const attempt = async () => {
+          await waitForLoad(`mutant ${m.id}`);
+          rmSync(resultFile, { force: true });
+          const r = await run(bin("vitest"), vitestArgs, { cwd: work, env, timeoutMs: perMutantMs });
+          let entry;
+          if (r.timedOut) {
+            entry = { ...m, status: "TIMEOUT", why: `no verdict within ${Math.round(perMutantMs / 1000)} s; process group killed${r.leftover ? "; SOME PROCESSES SURVIVED THE KILL" : ""}` };
+          } else if (r.code === 0) {
+            entry = { ...m, status: "SURVIVED", why: "" };
+          } else {
+            const json = parseVitestJson(resultFile);
+            const failed = json ? firstFailure(json) : null;
+            if (failed) entry = { ...m, status: "KILLED", why: failed };
+            else if (json && json.numFailedTestSuites > 0) entry = { ...m, status: "KILLED", why: "a test file failed to run (suite-level failure)", suiteLevel: true };
+            else {
+              const tail = (r.stderr || r.stdout).trim().split("\n").slice(-6).join(" | ").slice(-500);
+              entry = { ...m, status: "ERROR", why: `tests exited with code ${r.code} but no failing test was reported; last output: ${tail}` };
+            }
+          }
+          if (r.leftover) entry.leftover = true;
+          return entry;
+        };
+        let entry = await attempt();
+        if (entry.status === "ERROR") {
+          // a run that ends without a verdict (a crashed worker, a port clash on a busy machine) is repeated once; the
+          // retry is recorded in the result, never hidden
+          console.log(`ERROR     ${m.id}: first run gave no verdict (${entry.why}); running it once more`);
+          const firstWhy = entry.why;
+          entry = await attempt();
+          entry.retried = true;
+          entry.firstRun = firstWhy;
         }
-        if (r.leftover) entry.leftover = true;
         results.push(entry);
-        console.log(`${entry.status.padEnd(9)} ${m.id}${entry.status === "KILLED" ? `  <- ${entry.why}` : entry.why ? `  (${entry.why})` : ""}`);
+        console.log(`${entry.status.padEnd(9)} ${m.id}${entry.status === "KILLED" ? `  <- ${entry.why}` : entry.why ? `  (${entry.why})` : ""}${entry.retried ? "  [after a retry]" : ""}`);
       } finally {
         writeFileSync(target, original);
       }
