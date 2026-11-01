@@ -107,7 +107,12 @@ export function createApp(config: AppConfig): App {
   async function route(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const method = req.method ?? "GET";
-    const parts = url.pathname.split("/").filter(Boolean).map((p) => decodeURIComponent(p));
+    let parts: string[];
+    try {
+      parts = url.pathname.split("/").filter(Boolean).map((p) => decodeURIComponent(p));
+    } catch {
+      return sendJson(res, 400, { error: "bad_path" });
+    }
 
     if (parts.length === 1 && parts[0] === "health") {
       if (method !== "GET") return methodNotAllowed(res, "GET");

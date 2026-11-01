@@ -346,8 +346,8 @@ export class Store {
     name: string;
     phoneNumberId: string;
     accessToken: string;
-    wabaId?: string | undefined;
-    defaultCountry?: string | undefined;
+    wabaId?: string | null | undefined;
+    defaultCountry?: string | null | undefined;
     locale?: "es" | "en" | undefined;
     templates?: Tenant["templates"] | undefined;
   }): Tenant {
