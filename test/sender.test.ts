@@ -758,6 +758,53 @@ describe("outcomes the API leaves unclear", () => {
     expect(w.mock.requests.filter((q) => q.target === "messages")).toHaveLength(4);
   });
 
+  it("does not let a deliberate resend start while the previous send is still running", async () => {
+    const w = make();
+    const tenant = w.store.getTenant(AR.tenantId)!;
+    const doc = w.documents.get(AR.tenantId, DOC.arBudget)!;
+    const running = w.store.reserveSend({
+      tenantId: tenant.id,
+      documentId: doc.id,
+      docType: doc.type,
+      recipientKey: "541155500101",
+      recipientE164: "+5491155500101",
+      baseKey: `${tenant.id}|${doc.id}|541155500101`,
+      kind: "template",
+      templateName: "presupuesto_adjunto",
+      language: "es",
+      filename: "f.pdf",
+      resend: false,
+    });
+    const r = await go(w, DOC.arBudget, { resend: true });
+    expect(r.outcome).toBe("in_flight");
+    expect(r.send!.id).toBe(running.send.id);
+    expect(w.store.listSendsForDocument(tenant.id, doc.id)).toHaveLength(1);
+    expect(w.mock.messages).toHaveLength(0);
+  });
+
+  it("does not let \"retry the doubtful send\" take over a send another worker is running right now", async () => {
+    const w = make();
+    const tenant = w.store.getTenant(AR.tenantId)!;
+    const doc = w.documents.get(AR.tenantId, DOC.arBudget)!;
+    const running = w.store.reserveSend({
+      tenantId: tenant.id,
+      documentId: doc.id,
+      docType: doc.type,
+      recipientKey: "541155500101",
+      recipientE164: "+5491155500101",
+      baseKey: `${tenant.id}|${doc.id}|541155500101`,
+      kind: "template",
+      templateName: "presupuesto_adjunto",
+      language: "es",
+      filename: "f.pdf",
+      resend: false,
+    });
+    const r = await go(w, DOC.arBudget, { retryInDoubt: true });
+    expect(r.outcome).toBe("in_flight");
+    expect(r.send!.id).toBe(running.send.id);
+    expect(w.mock.messages).toHaveLength(0);
+  });
+
   it("resumes a send whose worker died mid-request, but only after the stale period", async () => {
     const w = make();
     const tenant = w.store.getTenant(AR.tenantId)!;

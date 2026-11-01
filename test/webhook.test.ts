@@ -410,6 +410,17 @@ describe("shape tolerance", () => {
     expect(w.store.linkedContactKey(AR.tenantId, "AR.777")).toBe("541155500101");
   });
 
+  it("uses the contacts[] pairing even when the message itself carries only the user id", async () => {
+    const w = make({ webhook: { confirmOptChanges: false } });
+    const payload = inboundPayload(arEnv, { from: MARIA, fromUserId: "AR.778", wamid: "wamid.IN2b", ts: w.clock.sec, text: "BAJA" }) as any;
+    delete payload.entry[0].changes[0].value.messages[0].from; // contacts[] still pairs wa_id and user_id
+    expect((await w.post(payload)).status).toBe(200);
+    // the opt-out and the window belong to the person's phone key, not to a provisional "bsuid:" key
+    expect(w.store.linkedContactKey(AR.tenantId, "AR.778")).toBe("541155500101");
+    expect(w.store.isOptedOut(AR.tenantId, "541155500101")).toBe(true);
+    expect(w.store.isOptedOut(AR.tenantId, "bsuid:AR.778")).toBe(false);
+  });
+
   it("learns the link from a status that carries recipient_user_id", async () => {
     const w = make();
     const sent = await sendBudget(w);
