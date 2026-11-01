@@ -54,7 +54,7 @@ const MUTANTS = [
     find: 'return { status: 200, contentType: "text/plain", body: challenge };', replace: 'return { status: 200, contentType: "application/json", body: { challenge } };' },
   { id: "hook-skip-signature", area: "webhook", file: "src/webhook.ts", what: "treat every POST as correctly signed",
     find: 'const sig = verifySignature({ rawBody: input.rawBody, header: header(input.headers, "x-hub-signature-256"), secrets: config.secrets });',
-    replace: 'const sig: ReturnType<typeof verifySignature> = (void verifySignature, { ok: true, entry: { secret: "" } });' },
+    replace: 'const sig = { ok: true, entry: { secret: "" } } as ReturnType<typeof verifySignature>;' },
   { id: "hook-unsigned-403", area: "webhook", file: "src/webhook.ts", what: "answer an unsigned request 403 instead of 401",
     find: 'const status = sig.reason === "missing_header" || sig.reason === "malformed_header" ? 401 : 403;', replace: "const status = 403;" },
   { id: "hook-mismatch-401", area: "webhook", file: "src/webhook.ts", what: "answer a wrong signature 401 instead of 403",
@@ -178,12 +178,12 @@ const MUTANTS = [
     find: "(current === null ? next : Math.min(current, next))", replace: "(current === null ? next : Math.max(current, next))" },
   { id: "st-late-sent-clears-failure", area: "status ordering", file: "src/statuses.ts", what: "a late sent status clears a failure",
     find: 'if (ev.status !== "sent") {', replace: "if (true) {" },
-  { id: "st-no-dedupe", area: "status ordering", file: "src/statuses.ts", what: "process a duplicate status event again",
-    find: 'if (eventId === null) return { result: "duplicate" };', replace: "" },
+  { id: "st-no-dedupe", area: "status ordering", file: "src/db.ts", what: "a duplicate status event is reported as new and processed again",
+    find: "return Number(info.changes) === 1 ? Number(info.lastInsertRowid) : null;", replace: "return Number(info.lastInsertRowid);" },
   { id: "st-cross-tenant-apply", area: "tenant routing", file: "src/statuses.ts", what: "apply a status to another tenant's send",
     find: 'if (other && other.tenantId !== ev.tenantId) return { result: "other_tenant" };', replace: "if (other && other.tenantId !== ev.tenantId) send = other;" },
   { id: "st-no-adoption", area: "status ordering", file: "src/statuses.ts", what: "never adopt a message id from a status that carries our reference",
-    find: "if (byRef.wamid === null) {", replace: "if (false) {" },
+    find: "if (byRef.wamid === null) {", replace: 'if (byRef.wamid === null && ev.wamid === "") {' },
   { id: "db-wamid-lookup-any-tenant", area: "tenant routing", file: "src/db.ts", what: "look a message id up across all tenants",
     find: 'SELECT * FROM sends WHERE tenant_id = ? AND wamid = ?").get(tenantId, wamid) as Row | undefined;', replace: 'SELECT * FROM sends WHERE (? IS NOT NULL) AND wamid = ?").get(tenantId, wamid) as Row | undefined;' },
   { id: "db-ref-lookup-any-tenant", area: "tenant routing", file: "src/db.ts", what: "match a send reference across all tenants",
@@ -219,7 +219,9 @@ const MUTANTS = [
   { id: "ph-br-ninth-digit", area: "normalisation", file: "src/phone.ts", what: "a nine-digit Brazilian subscriber may start with any digit",
     find: 'if (subscriber[0] !== "9") return fail("bad_leading_digit", raw);', replace: "" },
   { id: "ph-in-leading-digit", area: "normalisation", file: "src/phone.ts", what: "Indian numbers may start with any digit",
-    find: 'if (!/^[6-9]/.test(rest)) return fail("bad_leading_digit", raw);', replace: "" },
+    find: 'if (rest.length > 10) return fail("bad_length", raw);\n  if (!/^[6-9]/.test(rest)) return fail("bad_leading_digit", raw);', replace: 'if (rest.length > 10) return fail("bad_length", raw);' },
+  { id: "ph-es-leading-digit", area: "normalisation", file: "src/phone.ts", what: "Spanish numbers may start with any digit",
+    find: 'if (rest.length > 9) return fail("bad_length", raw);\n  if (!/^[6-9]/.test(rest)) return fail("bad_leading_digit", raw);', replace: 'if (rest.length > 9) return fail("bad_length", raw);' },
   { id: "ph-us-area-code", area: "normalisation", file: "src/phone.ts", what: "US area codes may start with 0 or 1",
     find: 'if (!/^[2-9]/.test(rest)) return fail("bad_area_code", raw);', replace: "" },
   { id: "ph-key-ar-9", area: "normalisation", file: "src/phone.ts", what: "matchKey keeps the Argentine 9 (the same person compares unequal)",
@@ -359,6 +361,17 @@ class LoadTimeout extends Error {}
 // ---------------------------------------------------------------------------------------------------------------------
 // the engine
 // ---------------------------------------------------------------------------------------------------------------------
+// "declared but never used" (TS6133 and its relatives) only says that a mutant left a variable behind; the code still
+// runs, so it is not a reason to discard the mutant. Any other compiler error makes the mutant INVALID.
+const UNUSED_CODES = new Set(["TS6133", "TS6192", "TS6196", "TS6198", "TS6199", "TS6205"]);
+function firstRealTypeError(output) {
+  const lines = output.split("\n").filter((l) => l.trim() !== "");
+  const errors = lines.filter((l) => /\berror TS\d+:/.test(l));
+  if (errors.length === 0) return lines[0] ?? "typecheck failed with no output";
+  const real = errors.find((l) => !UNUSED_CODES.has(/\berror (TS\d+):/.exec(l)[1]));
+  return real ?? null;
+}
+
 function applyMutant(original, m) {
   const edits = m.edits ?? [[m.find, m.replace]];
   let mutated = original;
@@ -442,8 +455,9 @@ async function runMutants({ root, entries, mutants, timeoutSec, typecheck, valid
         if (typecheck) {
           await waitForLoad(`typechecking ${m.id}`);
           const tc = await run(bin("tsc"), ["--noEmit"], { cwd: work, env, timeoutMs: 180_000 });
-          if (tc.timedOut || tc.code !== 0) {
-            const why = tc.timedOut ? "typecheck timed out" : "mutant does not typecheck: " + (tc.stdout || tc.stderr).split("\n")[0];
+          const realError = tc.timedOut || tc.code === 0 ? null : firstRealTypeError(tc.stdout || tc.stderr);
+          if (tc.timedOut || realError !== null) {
+            const why = tc.timedOut ? "typecheck timed out" : "mutant does not typecheck: " + realError;
             results.push({ ...m, status: "INVALID", why });
             console.log(`INVALID   ${m.id}: ${why}`);
             continue;
