@@ -1,6 +1,7 @@
 // A tiny example "documents" integration: budgets, invoices and purchase orders that can be sent by WhatsApp, and a
 // per-document send history built from the send log. This stands in for the host application's own documents module.
 
+import { readFileSync } from "node:fs";
 import type { DocType, SendRow, Store, Tenant } from "./db.ts";
 import { makePdf } from "./pdf.ts";
 import { DOC_LABEL } from "./templates.ts";
@@ -137,6 +138,19 @@ export class Documents {
     const lang = tenant?.locale ?? "es";
     return this.store.listSendsForDocument(tenantId, documentId).map((s) => toHistory(s, lang, this.store));
   }
+}
+
+interface FixtureFile {
+  tenants: Array<{ id: string; name: string; phoneNumberId: string; accessToken: string; wabaId?: string; defaultCountry?: string; locale?: "es" | "en" }>;
+  documents: DocumentRecord[];
+}
+
+/** Load the demo tenants and documents (examples/documents/fixtures.json) into a store. */
+export function loadFixtures(store: Store, documents: Documents, file: URL | string = new URL("../examples/documents/fixtures.json", import.meta.url)): { tenants: number; documents: number } {
+  const data = JSON.parse(readFileSync(file, "utf8")) as FixtureFile;
+  for (const t of data.tenants) store.upsertTenant(t);
+  for (const d of data.documents) documents.upsert(d);
+  return { tenants: data.tenants.length, documents: data.documents.length };
 }
 
 export interface HistoryEntry {
