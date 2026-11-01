@@ -1,0 +1,24 @@
+{
+  "name": "whatsapp-cloud-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Send generated PDF documents by WhatsApp from a multi-tenant Node app: E.164 phone normalisation, idempotent template/document sends, a verified status webhook with a per-tenant send log, opt-out and 24-hour-window rules. Tested offline against a local mock of the Graph API and signed fixtures.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "engines": {
+    "node": ">=25"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "serve": "node scripts/serve.ts",
+    "fixtures:generate": "node scripts/generate-fixtures.ts",
+    "mutation-check": "node scripts/mutation-check.mjs",
+    "mutation-selftest": "node scripts/mutation-check.mjs --selftest"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  }
+}
